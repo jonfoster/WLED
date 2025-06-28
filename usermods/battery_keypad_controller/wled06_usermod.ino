@@ -4,6 +4,7 @@
  */
 
 #include <Keypad.h>
+#include "remote_action.h"
 const byte keypad_rows = 4;
 const byte keypad_cols = 4;
 char keypad_keys[keypad_rows][keypad_cols] = {
@@ -35,7 +36,6 @@ void userLoop()
 {
     if (millis()-lastTime > delayMs)
     {
-
         long analog = analogRead(0);
         int new_bri = 1;
         if (analog > 900) {
@@ -44,97 +44,29 @@ void userLoop()
             new_bri = dim8_video(map(analog, 31, 900, 16, 255));
         }
         if (bri != new_bri) {
-            bri = new_bri;
-            colorUpdated(CALL_MODE_DIRECT_CHANGE);
-
+            RemoteAction.setBrightness(new_bri);
         }
 
         char myKey = myKeypad.getKey();
-        if (myKey != NULL) {
+        if (myKey != '\0') {
             switch (myKey) {
-                case '1':
-                    applyPreset(1);
-                    break;
-                case '2':
-                    applyPreset(2);
-                    break;
-                case '3':
-                    applyPreset(3);
-                    break;
-                case '4':
-                    applyPreset(4);
-                    break;
-                case '5':
-                    applyPreset(5);
-                    break;
-                case '6':
-                    applyPreset(6);
-                    break;
-                case 'A':
-                    applyPreset(7);
-                    break;
-                case 'B':
-                    applyPreset(8);
-                    break;
-
-                case '7':
-                    effectCurrent += 1;
-                    if (effectCurrent >= MODE_COUNT) effectCurrent = 0;
-                    colorUpdated(CALL_MODE_FX_CHANGED);
-                    break;
-                case '*':
-                    effectCurrent -= 1;
-                    if (effectCurrent < 0) effectCurrent = (MODE_COUNT-1);
-                    colorUpdated(CALL_MODE_FX_CHANGED);
-                    break;
-
-                case '8':
-                    if (effectSpeed < 240) {
-                        effectSpeed += 12;
-                    } else if (effectSpeed < 255) {
-                        effectSpeed += 1;
-                    }
-                    colorUpdated(CALL_MODE_FX_CHANGED);
-                    break;
-                case '0':
-                    if (effectSpeed > 15) {
-                        effectSpeed -= 12;
-                    } else if (effectSpeed > 0) {
-                        effectSpeed -= 1;
-                    }
-                    colorUpdated(CALL_MODE_FX_CHANGED);
-                    break;
-
-                case '9':
-                    if (effectIntensity < 240) {
-                        effectIntensity += 12;
-                    } else if (effectIntensity < 255) {
-                        effectIntensity += 1;
-                    }
-                    colorUpdated(CALL_MODE_FX_CHANGED);
-                    break;
-                case '#':
-                    if (effectIntensity > 15) {
-                        effectIntensity -= 12;
-                    } else if (effectIntensity > 0) {
-                        effectIntensity -= 1;
-                    }
-                    colorUpdated(CALL_MODE_FX_CHANGED);
-                    break;
-
-                case 'C':
-                    effectPalette += 1;
-                    if (effectPalette >= 50) effectPalette = 0;
-                    colorUpdated(CALL_MODE_FX_CHANGED);
-                    break;
-                case 'D':
-                    effectPalette -= 1;
-                    if (effectPalette <= 0) effectPalette = 50;
-                    colorUpdated(CALL_MODE_FX_CHANGED);
-                    break;
-
+                case '1': RemoteAction.preset(1);            break;
+                case '2': RemoteAction.preset(2);            break;
+                case '3': RemoteAction.preset(3);            break;
+                case '4': RemoteAction.preset(4);            break;
+                case '5': RemoteAction.preset(5);            break;
+                case '6': RemoteAction.preset(6);            break;
+                case 'A': RemoteAction.preset(7);            break;
+                case 'B': RemoteAction.preset(8);            break;
+                case '7': RemoteAction.nextEffect();         break;
+                case '*': RemoteAction.prevEffect();         break;
+                case '8': RemoteAction.incEffectSpeed();     break;
+                case '0': RemoteAction.decEffectSpeed();     break;
+                case '9': RemoteAction.incEffectIntensity(); break;
+                case '#': RemoteAction.decEffectIntensity(); break;
+                case 'C': RemoteAction.nextPalette();        break;
+                case 'D': RemoteAction.prevPalette();        break;
             }
-
         }
 
         lastTime = millis();

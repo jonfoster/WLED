@@ -1,5 +1,7 @@
 #include "wled.h"
 
+#include "remote_action.h"
+
 /*
  * Physical IO
  */
@@ -15,15 +17,17 @@
 static const char _mqtt_topic_button[] PROGMEM = "%s/button/%d";  // optimize flash usage
 static bool buttonBriDirection = false; // true: increase brightness, false: decrease brightness
 
+static UiAction ButtonAction(SegmentsFilter_SELECTED);
+
 void shortPressAction(uint8_t b)
 {
   if (!macroButton[b]) {
     switch (b) {
-      case 0: toggleOnOff(); stateUpdated(CALL_MODE_BUTTON); break;
-      case 1: ++effectCurrent %= strip.getModeCount(); stateChanged = true; colorUpdated(CALL_MODE_BUTTON); break;
+      case 0: ButtonAction.turnOnOffToggle(); break;
+      case 1: ButtonAction.nextEffect(); break;
     }
   } else {
-    applyPreset(macroButton[b], CALL_MODE_BUTTON_PRESET);
+    ButtonAction.preset(macroButton[b]);
   }
 
 #ifndef WLED_DISABLE_MQTT
@@ -40,23 +44,18 @@ void longPressAction(uint8_t b)
 {
   if (!macroLongPress[b]) {
     switch (b) {
-      case 0: setRandomColor(colPri); colorUpdated(CALL_MODE_BUTTON); break;
+      case 0: ButtonAction.setColorRandom(); break;
       case 1: 
         if(buttonBriDirection) {
-          if (bri == 255) break; // avoid unnecessary updates to brightness
-          if (bri >= 255 - WLED_LONG_BRI_STEPS) bri = 255;
-          else bri += WLED_LONG_BRI_STEPS;
+          ButtonAction.incBrightnessBy(WLED_LONG_BRI_STEPS);
         } else {
-          if (bri == 1) break; // avoid unnecessary updates to brightness
-          if (bri <= WLED_LONG_BRI_STEPS) bri = 1;
-          else bri -= WLED_LONG_BRI_STEPS;
+          ButtonAction.decBrightnessBy(WLED_LONG_BRI_STEPS);
         }
-        stateUpdated(CALL_MODE_BUTTON); 
         buttonPressedTime[b] = millis();         
         break; // repeatable action
     }
   } else {
-    applyPreset(macroLongPress[b], CALL_MODE_BUTTON_PRESET);
+    ButtonAction.preset(macroLongPress[b]);
   }
 
 #ifndef WLED_DISABLE_MQTT
@@ -73,11 +72,11 @@ void doublePressAction(uint8_t b)
 {
   if (!macroDoublePress[b]) {
     switch (b) {
-      //case 0: toggleOnOff(); colorUpdated(CALL_MODE_BUTTON); break; //instant short press on button 0 if no macro set
-      case 1: ++effectPalette %= getPaletteCount(); colorUpdated(CALL_MODE_BUTTON); break;
+      //case 0: ButtonAction.turnOnOffToggle(); break; //instant short press on button 0 if no macro set
+      case 1: ButtonAction.nextPalette(); break;
     }
   } else {
-    applyPreset(macroDoublePress[b], CALL_MODE_BUTTON_PRESET);
+    ButtonAction.preset(macroDoublePress[b]);
   }
 
 #ifndef WLED_DISABLE_MQTT
@@ -121,7 +120,7 @@ bool isButtonPressed(uint8_t b)
   return false;
 }
 
-void handleSwitch(uint8_t b)
+static void handleSwitch(uint8_t b)
 {
   // isButtonPressed() handles inverted/noninverted logic
   if (buttonPressedBefore[b] != isButtonPressed(b)) {
@@ -136,15 +135,17 @@ void handleSwitch(uint8_t b)
     DEBUG_PRINTF_P(PSTR("Switch: Activating  %u\n"), b);
     if (!buttonPressedBefore[b]) { // on -> off
       DEBUG_PRINTF_P(PSTR("Switch: On -> Off (%u)\n"), b);
-      if (macroButton[b]) applyPreset(macroButton[b], CALL_MODE_BUTTON_PRESET);
-      else { //turn on
-        if (!bri) {toggleOnOff(); stateUpdated(CALL_MODE_BUTTON);}
+      if (macroButton[b]) {
+        ButtonAction.preset(macroButton[b]);
+      } else { //turn on
+        ButtonAction.turnOn();
       }
     } else {  // off -> on
       DEBUG_PRINTF_P(PSTR("Switch: Off -> On (%u)\n"), b);
-      if (macroLongPress[b]) applyPreset(macroLongPress[b], CALL_MODE_BUTTON_PRESET);
-      else { //turn off
-        if (bri) {toggleOnOff(); stateUpdated(CALL_MODE_BUTTON);}
+      if (macroLongPress[b]) {
+        ButtonAction.preset(macroLongPress[b]);
+      } else { //turn off
+        ButtonAction.turnOff();
       }
     }
 
@@ -167,7 +168,7 @@ void handleSwitch(uint8_t b)
 #define POT_SMOOTHING 0.25f         // smoothing factor for raw potentiometer readings
 #define POT_SENSITIVITY 4           // changes below this amount are noise (POT scratching, or ADC noise)
 
-void handleAnalog(uint8_t b)
+static void handleAnalog(uint8_t b)
 {
   static uint8_t oldRead[WLED_MAX_BUTTONS] = {0};
   static float filteredReading[WLED_MAX_BUTTONS] = {0.0f};
@@ -211,26 +212,23 @@ void handleAnalog(uint8_t b)
     // if "double press" macro defines which option to change
     if (macroDoublePress[b] >= 250) {
       // global brightness
-      if (aRead == 0) {
-        briLast = bri;
-        bri = 0;
-      } else {
-        if (bri == 0) strip.restartRuntime();
-        bri = aRead;
-      }
+      ButtonAction.setBrightness(aRead);
     } else if (macroDoublePress[b] == 249) {
       // effect speed
-      effectSpeed = aRead;
+      ButtonAction.changeEffectSpeed(aRead);
     } else if (macroDoublePress[b] == 248) {
       // effect intensity
-      effectIntensity = aRead;
+      ButtonAction.changeEffectIntensity(aRead);
     } else if (macroDoublePress[b] == 247) {
       // selected palette
-      effectPalette = map(aRead, 0, 252, 0, getPaletteCount()-1);
-      effectPalette = constrain(effectPalette, 0, getPaletteCount()-1);  // map is allowed to "overshoot", so we need to contrain the result
+      uint8_t pal = map(aRead, 0, 252, 0, getPaletteCount()-1);
+      pal = constrain(pal, 0, getPaletteCount()-1);  // map is allowed to "overshoot", so we need to contrain the result
+      ButtonAction.changePalette(pal);
     } else if (macroDoublePress[b] == 200) {
       // primary color, hue, full saturation
       colorHStoRGB(aRead*256,255,colPri);
+      applyValuesToSelectedSegs();
+      stateUpdated(CALL_MODE_BUTTON);
     } else {
       // otherwise use "double press" for segment selection
       Segment& seg = strip.getSegment(macroDoublePress[b]);
@@ -242,6 +240,8 @@ void handleAnalog(uint8_t b)
       }
       // this will notify clients of update (websockets,mqtt,etc)
       updateInterfaces(CALL_MODE_BUTTON);
+      applyValuesToSelectedSegs();
+      stateUpdated(CALL_MODE_BUTTON);
     }
   } else {
     DEBUG_PRINTLN(F("Analog: No action"));
@@ -249,7 +249,6 @@ void handleAnalog(uint8_t b)
     // we can either trigger a preset depending on the level (between short and long entries)
     // or use it for RGBW direct control
   }
-  colorUpdated(CALL_MODE_BUTTON);
 }
 
 void handleButton()

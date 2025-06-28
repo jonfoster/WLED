@@ -1,8 +1,8 @@
 #include "wled.h"
+#include "remote_action.h"
 #include "Arduino.h"
 #include <RCSwitch.h>
 
-#define RF433_BUSWAIT_TIMEOUT 24
 
 class RF433Usermod : public Usermod
 {
@@ -118,60 +118,27 @@ public:
     return USERMOD_ID_RF433;
   }
 
-  // this function follows the same principle as decodeIRJson() / remoteJson()
   bool remoteJson433(int button)
   {
     char objKey[14];
-    bool parsed = false;
-
-    if (!requestJSONBufferLock(22)) return false;
+    char fileName[20];
 
     sprintf_P(objKey, PSTR("\"%d\":"), button);
+    strcpy_P(fileName, PSTR("/remote433.json"));
 
-    unsigned long start = millis();
-    while (strip.isUpdating() && millis()-start < RF433_BUSWAIT_TIMEOUT) yield(); // wait for strip to finish updating, accessing FS during sendout causes glitches
+    UiJsonActionResult r = RemoteAction.runJson(22, fileName, objKey);
 
-    // attempt to read command from remote.json
-    readObjectFromFile(PSTR("/remote433.json"), objKey, pDoc);
-    JsonObject fdo = pDoc->as<JsonObject>();
-    if (fdo.isNull()) {
-      // the received button does not exist
-      releaseJSONBufferLock();
-      return parsed;
-    }
-
-    String cmdStr = fdo["cmd"].as<String>();
-    JsonObject jsonCmdObj = fdo["cmd"]; //object
-
-    if (jsonCmdObj.isNull())  // we could also use: fdo["cmd"].is<String>()
+    switch (r)
     {
-      // HTTP API command
-      String apireq = "win"; apireq += '&';                        // reduce flash string usage
-      if (!cmdStr.startsWith(apireq)) cmdStr = apireq + cmdStr;    // if no "win&" prefix
-      if (!irApplyToAllSelected && cmdStr.indexOf(F("SS="))<0) {
-        char tmp[10];
-        sprintf_P(tmp, PSTR("&SS=%d"), strip.getMainSegmentId());
-        cmdStr += tmp;
-      }
-      fdo.clear();                                                 // clear JSON buffer (it is no longer needed)
-      handleSet(nullptr, cmdStr, false);                           // no stateUpdated() call here
-      stateUpdated(CALL_MODE_BUTTON);
-      parsed = true;
-    } else {
-    // command is JSON object
-      if (jsonCmdObj[F("psave")].isNull())
-        deserializeState(jsonCmdObj, CALL_MODE_BUTTON_PRESET);
-      else {
-        uint8_t psave = jsonCmdObj[F("psave")].as<int>();
-        char pname[33];
-        sprintf_P(pname, PSTR("IR Preset %d"), psave);
-        fdo.clear();
-        if (psave > 0 && psave < 251) savePreset(psave, pname, fdo);
-      }
-      parsed = true;
+      case UiJsonActionResult_OK:
+      case UiJsonActionResult_OK_REPEATABLE:
+        return true;
+      case UiJsonActionResult_ERR_NO_FILE:
+      case UiJsonActionResult_ERR_LOCK:
+      case UiJsonActionResult_ERR_CODE_NOT_IN_FILE:
+      case UiJsonActionResult_ERR_CODE_NO_ACTION:
+        return false;
     }
-    releaseJSONBufferLock();
-    return parsed;
   }
 };
 

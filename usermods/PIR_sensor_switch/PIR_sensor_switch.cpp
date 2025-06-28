@@ -1,4 +1,5 @@
 #include "wled.h"
+#include "remote_action.h"
 
 #ifndef PIR_SENSOR_PIN
   // compatible with QuinLED-Dig-Uno
@@ -244,10 +245,7 @@ void PIRsensorSwitch::switchStrip(bool switchOn)
       return;
     }
     // preset not assigned
-    if (bri == 0) {
-      bri = briLast;
-      stateUpdated(CALL_MODE_BUTTON);
-    }
+    RemoteAction.turnOn();
   } else {
     if (m_offPreset) {
       applyPreset(m_offPreset, CALL_MODE_BUTTON_PRESET);
@@ -263,11 +261,7 @@ void PIRsensorSwitch::switchStrip(bool switchOn)
       return;
     }
     // preset not assigned
-    if (bri != 0) {
-      briLast = bri;
-      bri = 0;
-      stateUpdated(CALL_MODE_BUTTON);
-    }
+    RemoteAction.turnOff();
   }
 }
 

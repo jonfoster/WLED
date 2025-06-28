@@ -1,4 +1,5 @@
 #include "wled.h"
+#include "remote_action.h"
 
 //
 // Inspired by the original v2 usermods
@@ -207,6 +208,8 @@ class RotaryEncoderUIUsermod : public Usermod {
 
     bool applyToAll;
 
+    UiAction encoderAction;
+
     bool initDone;
     bool enabled;
 
@@ -277,6 +280,7 @@ class RotaryEncoderUIUsermod : public Usermod {
       , presetHigh(0)
       , presetLow(0)
       , applyToAll(true)
+      , encoderAction(SegmentsFilter_ACTIVE)
       , initDone(false)
       , enabled(true)
       , usePcf8574(USE_PCF8574)
@@ -363,7 +367,6 @@ class RotaryEncoderUIUsermod : public Usermod {
     void displayNetworkInfo();
     void findCurrentEffectAndPalette();
     bool changeState(const char *stateName, byte markedLine, byte markedCol, byte glyph);
-    void lampUdated();
     void changeBrightness(bool increase);
     void changeEffect(bool increase);
     void changeEffectSpeed(bool increase);
@@ -583,8 +586,8 @@ void RotaryEncoderUIUsermod::loop()
       buttonWaitTime = 0;
       if (!buttonLongPressed) {
         if (doublePress) {
-          toggleOnOff();
-          lampUdated();
+          encoderAction.turnOnOffToggle();
+          updateInterfaces(CALL_MODE_BUTTON);
         } else {
           buttonWaitTime = currentTime;
         }
@@ -608,7 +611,7 @@ void RotaryEncoderUIUsermod::loop()
           case  5: strcpy_P(lineBuffer, PSTR("Main Color")); changedState = true; break;
           case  6: strcpy_P(lineBuffer, PSTR("Saturation")); changedState = true; break;
           case  7: 
-            if (!(strip.getSegment(applyToAll ? strip.getFirstSelectedSegId() : strip.getMainSegmentId()).getLightCapabilities() & 0x04)) newState++;
+            if (!((applyToAll ? strip.getFirstSelectedSeg() : strip.getMainSegment()).getLightCapabilities() & 0x04)) newState++;
             else { strcpy_P(lineBuffer, PSTR("CCT")); changedState = true; }
             break;
           case  8: if (presetHigh==0 || presetLow == 0) newState++; else { strcpy_P(lineBuffer, PSTR("Preset")); changedState = true; } break;
@@ -726,14 +729,6 @@ bool RotaryEncoderUIUsermod::changeState(const char *stateName, byte markedLine,
   return true;
 }
 
-void RotaryEncoderUIUsermod::lampUdated() {
-  //call for notifier -> 0: init 1: direct change 2: button 3: notification 4: nightlight 5: other (No notification)
-  // 6: fx changed 7: hue 8: preset cycle 9: blynk 10: alexa
-  //setValuesFromFirstSelectedSeg(); //to make transition work on main segment (should no longer be required)
-  stateUpdated(CALL_MODE_BUTTON);
-  updateInterfaces(CALL_MODE_BUTTON);
-}
-
 void RotaryEncoderUIUsermod::changeBrightness(bool increase) {
 #ifdef USERMOD_FOUR_LINE_DISPLAY
   if (display && display->wakeDisplay()) {
@@ -743,10 +738,12 @@ void RotaryEncoderUIUsermod::changeBrightness(bool increase) {
   }
   display->updateRedrawTime();
 #endif
-  //bri = max(min((increase ? bri+fadeAmount : bri-fadeAmount), 255), 0);
-  if (bri < 40) bri = max(min((increase ? bri+fadeAmount/2 : bri-fadeAmount/2), 255), 0); // slower steps when brightness < 16%
-  else bri = max(min((increase ? bri+fadeAmount : bri-fadeAmount), 255), 0);
-  lampUdated();
+  if (increase) {
+    encoderAction.incBrightnessAlternate();
+  } else {
+    encoderAction.decBrightnessAlternate();
+  }
+  updateInterfaces(CALL_MODE_BUTTON);
 #ifdef USERMOD_FOUR_LINE_DISPLAY
   display->updateBrightness();
 #endif
@@ -763,19 +760,11 @@ void RotaryEncoderUIUsermod::changeEffect(bool increase) {
   display->updateRedrawTime();
 #endif
   effectCurrentIndex = max(min((increase ? effectCurrentIndex+1 : effectCurrentIndex-1), strip.getModeCount()-1), 0);
-  effectCurrent = modes_alpha_indexes[effectCurrentIndex];
-  stateChanged = true;
-  if (applyToAll) {
-    for (unsigned i=0; i<strip.getSegmentsNum(); i++) {
-      Segment& seg = strip.getSegment(i);
-      if (!seg.isActive()) continue;
-      seg.setMode(effectCurrent);
-    }
-  } else {
-    Segment& seg = strip.getSegment(strip.getMainSegmentId());
-    seg.setMode(effectCurrent);
-  }
-  lampUdated();
+
+  uint8_t new_effect = modes_alpha_indexes[effectCurrentIndex];
+
+  encoderAction.changeEffect(new_effect);
+  updateInterfaces(CALL_MODE_BUTTON);
 #ifdef USERMOD_FOUR_LINE_DISPLAY
   display->showCurrentEffectOrPalette(effectCurrent, JSON_mode_names, 3);
 #endif
@@ -791,19 +780,8 @@ void RotaryEncoderUIUsermod::changeEffectSpeed(bool increase) {
   }
   display->updateRedrawTime();
 #endif
-  effectSpeed = max(min((increase ? effectSpeed+fadeAmount : effectSpeed-fadeAmount), 255), 0);
-  stateChanged = true;
-  if (applyToAll) {
-    for (unsigned i=0; i<strip.getSegmentsNum(); i++) {
-      Segment& seg = strip.getSegment(i);
-      if (!seg.isActive()) continue;
-      seg.speed = effectSpeed;
-    }
-  } else {
-    Segment& seg = strip.getSegment(strip.getMainSegmentId());
-    seg.speed = effectSpeed;
-  }
-  lampUdated();
+  encoderAction.changeEffectSpeedRelative(increase ? fadeAmount : -fadeAmount);
+  updateInterfaces(CALL_MODE_BUTTON);
 #ifdef USERMOD_FOUR_LINE_DISPLAY
   display->updateSpeed();
 #endif
@@ -819,19 +797,8 @@ void RotaryEncoderUIUsermod::changeEffectIntensity(bool increase) {
   }
   display->updateRedrawTime();
 #endif
-  effectIntensity = max(min((increase ? effectIntensity+fadeAmount : effectIntensity-fadeAmount), 255), 0);
-  stateChanged = true;
-  if (applyToAll) {
-    for (unsigned i=0; i<strip.getSegmentsNum(); i++) {
-      Segment& seg = strip.getSegment(i);
-      if (!seg.isActive()) continue;
-      seg.intensity = effectIntensity;
-    }
-  } else {
-    Segment& seg = strip.getSegment(strip.getMainSegmentId());
-    seg.intensity = effectIntensity;
-  }
-  lampUdated();
+  encoderAction.changeEffectIntensityRelative(increase ? fadeAmount : -fadeAmount);
+  updateInterfaces(CALL_MODE_BUTTON);
 #ifdef USERMOD_FOUR_LINE_DISPLAY
   display->updateIntensity();
 #endif
@@ -848,33 +815,8 @@ void RotaryEncoderUIUsermod::changeCustom(uint8_t par, bool increase) {
   }
   display->updateRedrawTime();
 #endif
-  stateChanged = true;
-  if (applyToAll) {
-    uint8_t id = strip.getFirstSelectedSegId();
-    Segment& sid = strip.getSegment(id);
-    switch (par) {
-      case 3:  val = sid.custom3 = max(min((increase ? sid.custom3+fadeAmount : sid.custom3-fadeAmount), 255), 0); break;
-      case 2:  val = sid.custom2 = max(min((increase ? sid.custom2+fadeAmount : sid.custom2-fadeAmount), 255), 0); break;
-      default: val = sid.custom1 = max(min((increase ? sid.custom1+fadeAmount : sid.custom1-fadeAmount), 255), 0); break;
-    }
-    for (unsigned i=0; i<strip.getSegmentsNum(); i++) {
-      Segment& seg = strip.getSegment(i);
-      if (!seg.isActive() || i == id) continue;
-      switch (par) {
-        case 3:  seg.custom3 = sid.custom3; break;
-        case 2:  seg.custom2 = sid.custom2; break;
-        default: seg.custom1 = sid.custom1; break;
-      }
-    }
-  } else {
-    Segment& seg = strip.getMainSegment();
-    switch (par) {
-      case 3:  val = seg.custom3 = max(min((increase ? seg.custom3+fadeAmount : seg.custom3-fadeAmount), 255), 0); break;
-      case 2:  val = seg.custom2 = max(min((increase ? seg.custom2+fadeAmount : seg.custom2-fadeAmount), 255), 0); break;
-      default: val = seg.custom1 = max(min((increase ? seg.custom1+fadeAmount : seg.custom1-fadeAmount), 255), 0); break;
-    }
-  }
-  lampUdated();
+  encoderAction.changeCustomRelative(par, increase ? fadeAmount : -fadeAmount);
+  updateInterfaces(CALL_MODE_BUTTON);
 #ifdef USERMOD_FOUR_LINE_DISPLAY
   char lineBuffer[64];
   sprintf(lineBuffer, "%d", val);
@@ -893,19 +835,9 @@ void RotaryEncoderUIUsermod::changePalette(bool increase) {
   display->updateRedrawTime();
 #endif
   effectPaletteIndex = max(min((unsigned)(increase ? effectPaletteIndex+1 : effectPaletteIndex-1), getPaletteCount()+customPalettes.size()-1), 0U);
-  effectPalette = palettes_alpha_indexes[effectPaletteIndex];
-  stateChanged = true;
-  if (applyToAll) {
-    for (unsigned i=0; i<strip.getSegmentsNum(); i++) {
-      Segment& seg = strip.getSegment(i);
-      if (!seg.isActive()) continue;
-      seg.setPalette(effectPalette);
-    }
-  } else {
-    Segment& seg = strip.getSegment(strip.getMainSegmentId());
-    seg.setPalette(effectPalette);
-  }
-  lampUdated();
+  uint8_t new_palette = palettes_alpha_indexes[effectPaletteIndex];
+  encoderAction.changePalette(new_palette);
+  updateInterfaces(CALL_MODE_BUTTON);
 #ifdef USERMOD_FOUR_LINE_DISPLAY
   display->showCurrentEffectOrPalette(effectPalette, JSON_palette_names, 2);
 #endif
@@ -923,18 +855,9 @@ void RotaryEncoderUIUsermod::changeHue(bool increase){
 #endif
   currentHue1 = max(min((increase ? currentHue1+fadeAmount : currentHue1-fadeAmount), 255), 0);
   colorHStoRGB(currentHue1*256, currentSat1, colPri);
-  stateChanged = true; 
-  if (applyToAll) {
-    for (unsigned i=0; i<strip.getSegmentsNum(); i++) {
-      Segment& seg = strip.getSegment(i);
-      if (!seg.isActive()) continue;
-      seg.colors[0] = RGBW32(colPri[0], colPri[1], colPri[2], colPri[3]);
-    }
-  } else {
-    Segment& seg = strip.getSegment(strip.getMainSegmentId());
-    seg.colors[0] = RGBW32(colPri[0], colPri[1], colPri[2], colPri[3]);
-  }
-  lampUdated();
+  uint32_t new_color = RGBW32(colPri[0], colPri[1], colPri[2], colPri[3]);
+  encoderAction.changeColor(new_color);
+  updateInterfaces(CALL_MODE_BUTTON);
 #ifdef USERMOD_FOUR_LINE_DISPLAY
   char lineBuffer[64];
   sprintf(lineBuffer, "%d", currentHue1);
@@ -953,17 +876,9 @@ void RotaryEncoderUIUsermod::changeSat(bool increase){
 #endif
   currentSat1 = max(min((increase ? currentSat1+fadeAmount : currentSat1-fadeAmount), 255), 0);
   colorHStoRGB(currentHue1*256, currentSat1, colPri);
-  if (applyToAll) {
-    for (unsigned i=0; i<strip.getSegmentsNum(); i++) {
-      Segment& seg = strip.getSegment(i);
-      if (!seg.isActive()) continue;
-      seg.colors[0] = RGBW32(colPri[0], colPri[1], colPri[2], colPri[3]);
-    }
-  } else {
-    Segment& seg = strip.getSegment(strip.getMainSegmentId());
-    seg.colors[0] = RGBW32(colPri[0], colPri[1], colPri[2], colPri[3]);
-  }
-  lampUdated();
+  uint32_t new_color = RGBW32(colPri[0], colPri[1], colPri[2], colPri[3]);
+  encoderAction.changeColor(new_color);
+  updateInterfaces(CALL_MODE_BUTTON);
 #ifdef USERMOD_FOUR_LINE_DISPLAY
   char lineBuffer[64];
   sprintf(lineBuffer, "%d", currentSat1);
@@ -995,7 +910,8 @@ void RotaryEncoderUIUsermod::changePreset(bool increase) {
     apireq += presetHigh;
     handleSet(nullptr, apireq, false);
 */
-    lampUdated();
+    stateUpdated(CALL_MODE_BUTTON);
+    updateInterfaces(CALL_MODE_BUTTON);
   #ifdef USERMOD_FOUR_LINE_DISPLAY
     sprintf(str, "%d", currentPreset);
     display->overlay(str, 500, 11); // use heart
@@ -1013,17 +929,11 @@ void RotaryEncoderUIUsermod::changeCCT(bool increase){
   display->updateRedrawTime();
 #endif
   currentCCT = max(min((increase ? currentCCT+fadeAmount : currentCCT-fadeAmount), 255), 0);
-//    if (applyToAll) {
-    for (unsigned i=0; i<strip.getSegmentsNum(); i++) {
-      Segment& seg = strip.getSegment(i);
-      if (!seg.isActive()) continue;
-      seg.setCCT(currentCCT);
-    }
-//    } else {
-//      Segment& seg = strip.getSegment(strip.getMainSegmentId());
-//      seg.setCCT(currentCCT, strip.getMainSegmentId());
-//    }
-  lampUdated();
+
+  // This is always done for all segments, even if applyToAll is false.
+  UiAction(SegmentsFilter_ACTIVE).changeCct(currentCCT);
+
+  updateInterfaces(CALL_MODE_BUTTON);
 #ifdef USERMOD_FOUR_LINE_DISPLAY
   char lineBuffer[64];
   sprintf(lineBuffer, "%d", currentCCT);
@@ -1122,6 +1032,7 @@ bool RotaryEncoderUIUsermod::readFromConfig(JsonObject &root) {
 
   enabled    = top[FPSTR(_enabled)] | enabled;
   applyToAll = top[FPSTR(_applyToAll)] | applyToAll;
+  encoderAction = UiAction(applyToAll ? SegmentsFilter_ACTIVE : SegmentsFilter_MAIN);
 
   usePcf8574 = top[FPSTR(_pcf8574)] | usePcf8574;
   addrPcf8574 = top[FPSTR(_pcfAddress)] | addrPcf8574;
