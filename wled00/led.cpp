@@ -4,9 +4,14 @@
  * LED methods
  */
 
- // applies chosen setment properties to legacy values
+// applies chosen setment properties to legacy values
 void setValuesFromSegment(uint8_t s) {
   const Segment& seg = strip.getSegment(s);
+  setValuesFromSegmentRef(seg);
+}
+
+// applies chosen setment properties to legacy values
+void setValuesFromSegmentRef(const Segment& seg) {
   colPri[0] = R(seg.colors[0]);
   colPri[1] = G(seg.colors[0]);
   colPri[2] = B(seg.colors[0]);

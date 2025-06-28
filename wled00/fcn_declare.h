@@ -282,6 +282,7 @@ bool serveLiveLeds(AsyncWebServerRequest* request, uint32_t wsClient = 0);
 
 //led.cpp
 void setValuesFromSegment(uint8_t s);
+void setValuesFromSegmentRef(const Segment& seg);
 #define setValuesFromMainSeg()          setValuesFromSegment(strip.getMainSegmentId())
 #define setValuesFromFirstSelectedSeg() setValuesFromSegment(strip.getFirstSelectedSegId())
 void toggleOnOff();
