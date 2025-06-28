@@ -121,7 +121,8 @@ class Animated_Staircase : public Usermod {
       }
       strip.trigger();  // force strip refresh
       stateChanged = true;  // inform external devices/UI of change
-      colorUpdated(CALL_MODE_DIRECT_CHANGE);
+      applyValuesToSelectedSegs();
+      stateUpdated(CALL_MODE_NO_NOTIFY);
     }
 
     /*
@@ -309,7 +310,8 @@ class Animated_Staircase : public Usermod {
         }
         strip.trigger();  // force strip update
         stateChanged = true;  // inform external devices/UI of change
-        colorUpdated(CALL_MODE_DIRECT_CHANGE);
+        applyValuesToSelectedSegs();
+        stateUpdated(CALL_MODE_NO_NOTIFY);
         DEBUG_PRINTLN(F("Animated Staircase disabled."));
       }
       enabled = enable;

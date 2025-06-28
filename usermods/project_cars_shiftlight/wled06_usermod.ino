@@ -75,7 +75,8 @@ void PCARS_buildcolorbars() {
 
     }
   }
-  colorUpdated(CALL_MODE_NO_NOTIFY);
+  applyValuesToSelectedSegs();
+  stateUpdated(CALL_MODE_NO_NOTIFY);
   strip.show();
 }
 

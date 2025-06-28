@@ -226,7 +226,8 @@ void handleNightlight() {
         if (bri) effectSpeed += 60; //sunset if currently on
         briNlT = !bri; //true == sunrise, false == sunset
         if (!bri) bri = briLast;
-        colorUpdated(CALL_MODE_NO_NOTIFY);
+        applyValuesToSelectedSegs();
+        stateUpdated(CALL_MODE_NO_NOTIFY);
       }
     }
     float nper = (millis() - nightlightStartTime)/((float)nightlightDelayMs);
@@ -237,7 +238,8 @@ void handleNightlight() {
       {
         for (unsigned i=0; i<4; i++) colPri[i] = colNlT[i]+ ((colSec[i] - colNlT[i])*nper);   // fading from actual color to secondary color
       }
-      colorUpdated(CALL_MODE_NO_NOTIFY);
+      applyValuesToSelectedSegs();
+      stateUpdated(CALL_MODE_NO_NOTIFY);
     }
     if (nper >= 1) //nightlight duration over
     {
@@ -245,7 +247,8 @@ void handleNightlight() {
       if (nightlightMode == NL_MODE_SET)
       {
         bri = nightlightTargetBri;
-        colorUpdated(CALL_MODE_NO_NOTIFY);
+        applyValuesToSelectedSegs();
+        stateUpdated(CALL_MODE_NO_NOTIFY);
       }
       if (bri == 0) briLast = briNlT;
       if (nightlightMode == NL_MODE_SUN)
@@ -269,7 +272,8 @@ void handleNightlight() {
       effectCurrent = colNlT[0];
       effectSpeed = colNlT[1];
       effectPalette = colNlT[2];
-      colorUpdated(CALL_MODE_NO_NOTIFY);
+      applyValuesToSelectedSegs();
+      stateUpdated(CALL_MODE_NO_NOTIFY);
     }
     nightlightActiveOld = false;
   }

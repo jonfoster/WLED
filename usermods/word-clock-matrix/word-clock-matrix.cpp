@@ -66,13 +66,15 @@ public:
   {
     //strip.resetSegments();
     selectWordSegments(true);
-    colorUpdated(CALL_MODE_FX_CHANGED);
+    applyValuesToSelectedSegs();
+    stateUpdated(CALL_MODE_FX_CHANGED);
     savePreset(13);
     selectWordSegments(false);
     //strip.getSegment(0).setOption(0, true);
     strip.getSegment(0).setOption(2, true);
     applyPreset(12);
-    colorUpdated(CALL_MODE_FX_CHANGED);
+    applyValuesToSelectedSegs();
+    stateUpdated(CALL_MODE_FX_CHANGED);
   }
 
   void displayTime(byte hour, byte minute)

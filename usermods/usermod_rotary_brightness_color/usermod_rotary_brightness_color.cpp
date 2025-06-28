@@ -90,6 +90,7 @@ public:
           {
             if (bri + fadeAmount <= 255)
               bri += fadeAmount; // increase the brightness, dont go over 255
+            stateUpdated(CALL_MODE_BUTTON);
           }
           else
           {
@@ -107,6 +108,8 @@ public:
             colPri[0] = fastled_col.red;
             colPri[1] = fastled_col.green;
             colPri[2] = fastled_col.blue;
+            applyValuesToSelectedSegs();
+            stateUpdated(CALL_MODE_BUTTON);
           }
         }
         else if (Enc_B == LOW)
@@ -115,6 +118,7 @@ public:
           {
             if (bri - fadeAmount >= 0)
               bri -= fadeAmount; // decrease the brightness, dont go below 0
+            stateUpdated(CALL_MODE_BUTTON);
           }
           else
           {
@@ -132,11 +136,10 @@ public:
             colPri[0] = fastled_col.red;
             colPri[1] = fastled_col.green;
             colPri[2] = fastled_col.blue;
+            applyValuesToSelectedSegs();
+            stateUpdated(CALL_MODE_BUTTON);
           }
         }
-        //call for notifier -> 0: init 1: direct change 2: button 3: notification 4: nightlight 5: other (No notification)
-        // 6: fx changed 7: hue 8: preset cycle 9: blynk 10: alexa
-        colorUpdated(CALL_MODE_BUTTON);
         updateInterfaces(CALL_MODE_BUTTON);
       }
       Enc_A_prev = Enc_A;     // Store value of A for next time

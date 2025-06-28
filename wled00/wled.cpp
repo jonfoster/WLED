@@ -553,7 +553,8 @@ void WLED::beginStrip()
     strip.fill(BLACK);
     strip.show();
   }
-  colorUpdated(CALL_MODE_INIT); // will not send notification but will initiate transition
+  applyValuesToSelectedSegs();
+  stateUpdated(CALL_MODE_INIT); // will not send notification but will initiate transition
   if (bootPreset > 0) {
     applyPreset(bootPreset, CALL_MODE_INIT);
   }

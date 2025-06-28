@@ -44,7 +44,8 @@ void setup() {
       if (millis() + strip.timebase > (cycleTime - 25)) { //wipe complete
         effectCurrent = FX_MODE_STATIC;
         timeStaticStart = millis();
-        colorUpdated(CALL_MODE_NOTIFICATION);
+        applyValuesToSelectedSegs();
+        stateUpdated(CALL_MODE_NOTIFICATION);
         wipeState = 2;
       }
     } else if (wipeState == 2) { //static
@@ -56,7 +57,8 @@ void setup() {
       #ifdef STAIRCASE_WIPE_OFF
       effectCurrent = FX_MODE_COLOR_WIPE;
       strip.timebase = 360 + (255 - effectSpeed)*75 - millis(); //make sure wipe starts fully lit
-      colorUpdated(CALL_MODE_NOTIFICATION);
+      applyValuesToSelectedSegs();
+      stateUpdated(CALL_MODE_NOTIFICATION);
       wipeState = 4;
       #else
       turnOff();
@@ -92,18 +94,19 @@ void setup() {
 
     void startWipe()
     {
-    bri = briLast; //turn on
-    jsonTransitionOnce = true;
-    strip.setTransition(0); //no transition
-    effectCurrent = FX_MODE_COLOR_WIPE;
-    strip.resetTimebase(); //make sure wipe starts from beginning
+      bri = briLast; //turn on
+      jsonTransitionOnce = true;
+      strip.setTransition(0); //no transition
+      effectCurrent = FX_MODE_COLOR_WIPE;
+      strip.resetTimebase(); //make sure wipe starts from beginning
 
-    //set wipe direction
-    Segment& seg = strip.getSegment(0);
-    bool doReverse = (userVar0 == 2);
-    seg.setOption(1, doReverse);
+      //set wipe direction
+      Segment& seg = strip.getSegment(0);
+      bool doReverse = (userVar0 == 2);
+      seg.setOption(1, doReverse);
 
-    colorUpdated(CALL_MODE_NOTIFICATION);
+      applyValuesToSelectedSegs();
+      stateUpdated(CALL_MODE_NOTIFICATION);
     }
 
     void turnOff()

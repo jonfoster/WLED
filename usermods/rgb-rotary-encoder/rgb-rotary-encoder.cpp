@@ -206,7 +206,8 @@ class RgbRotaryEncoderUsermod : public Usermod
         lastKnownBri = bri;
 
         updateLeds();
-        colorUpdated(CALL_MODE_DIRECT_CHANGE);
+        applyValuesToSelectedSegs();
+        stateUpdated(CALL_MODE_DIRECT_CHANGE);
       }
 
       // If the brightness is changed not with the rotary, update the rotary
