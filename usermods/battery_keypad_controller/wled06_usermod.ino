@@ -45,7 +45,7 @@ void userLoop()
         }
         if (bri != new_bri) {
             bri = new_bri;
-            colorUpdated(1);
+            colorUpdated(CALL_MODE_DIRECT_CHANGE);
 
         }
 

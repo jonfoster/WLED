@@ -75,7 +75,7 @@ void PCARS_buildcolorbars() {
 
     }
   }
-  colorUpdated(5);
+  colorUpdated(CALL_MODE_NO_NOTIFY);
   strip.show();
 }
 
