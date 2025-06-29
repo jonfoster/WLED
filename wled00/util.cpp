@@ -582,14 +582,45 @@ void enumerateLedmaps() {
  * Returns a new, random color wheel index with a minimum distance of 42 from pos.
  */
 uint8_t get_random_wheel_index(uint8_t pos) {
-  uint8_t r = 0, x = 0, y = 0, d = 0;
-  while (d < 42) {
-    r = hw_random8();
-    x = abs(pos - r);
-    y = 255 - x;
-    d = MIN(x, y);
-  }
-  return r;
+  // Want a number at least 42 from pos.
+  constexpr uint8_t min_distance = 42u;
+
+  // That means there are 81 forbidden values that we are not allowed to return.
+  // There are 41 each side of pos, plus pos itself.
+  //
+  // We can just double min_distance, then subtract 1 because pos itself was
+  // double-counted.
+  constexpr uint8_t num_forbidden_values = min_distance * 2u - 1u;
+
+  // There are 256 possible values in total (0 to 255 inclusive).
+  // So the count of values we are allowed to return is just 256 minus
+  //  the number of forbidden values.
+  //
+  // This works out to 175.
+  constexpr uint16_t num_allowed_values = 256u - num_forbidden_values;
+
+  // Generate random number between 0 and (num_allowed_values - 1u) inclusive.
+  //
+  // Note that an alternative to this would be to use hw_random8() and a loop.
+  // But I think this is probably just as fast in the normal case - it adds
+  // a multiply and a shift, which are probably 2 cycles total on ESP32 or
+  // ESP32-S3.
+  unsigned r = hw_random16(num_allowed_values);
+
+  // Now we start with the original poition, and add on the minimum
+  // distance.  This guarantess we are the minimum distance away in the
+  // positive direction.  Then we add on the random number, which may take
+  // us even further away in the positive direction.
+  //
+  // Then we mod 256 (wrap at 256) to get the new position.
+  //
+  // This cannot get too close to the original position in the negative
+  // direction, because we carefully limited the maximum value of the
+  // random number to prevent that.  It also can't go past the original
+  // position for the same reason.
+  uint8_t new_pos = (uint8_t)((pos + (unsigned)min_distance + r) & 0xFFu);
+
+  return new_pos;
 }
 
 // float version of map()
